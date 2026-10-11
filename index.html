@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Professional, privacy-conscious Smart Vehicle Safety & Driver Monitoring System using edge AI computer vision." />
+  <title>Smart Vehicle Safety & Driver Monitoring System</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./src/css/style.css" />
+  <!-- Optional OpenCV.js for enhanced motion estimation; system includes full gradient fallback -->
+  <script async src="https://docs.opencv.org/4.10.0/opencv.js" onload="window.dispatchEvent(new Event('opencv-ready'))" onerror="console.warn('OpenCV.js CDN failed to load; using built-in spatial gradient optical flow fallback.')"></script>
+</head>
+<body>
+  <div class="app-wrapper">
+    <!-- Top Automotive Navigation Header -->
+    <header class="app-navbar">
+      <div class="brand-container">
+        <div class="brand-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            <circle cx="12" cy="11" r="3"/>
+          </svg>
+        </div>
+        <div class="brand-titles">
+          <h1 class="brand-title">Smart Vehicle Safety</h1>
+          <span class="brand-subtitle">Driver Monitoring System</span>
+        </div>
+      </div>
+
+      <!-- Navigation Tabs -->
+      <nav class="nav-tabs" aria-label="Main Navigation">
+        <button class="nav-tab active" data-view="dashboard" id="tab-dashboard">Live Monitoring</button>
+        <button class="nav-tab" data-view="history" id="tab-history">Session History</button>
+        <button class="nav-tab" data-view="analytics" id="tab-analytics">Safety Analytics</button>
+        <button class="nav-tab" data-view="settings" id="tab-settings">Settings</button>
+        <button class="nav-tab" data-view="about" id="tab-about">About & Help</button>
+      </nav>
+
+      <!-- Header Telemetry Bar -->
+      <div class="header-telemetry">
+        <div class="telemetry-pill">
+          <span class="pill-label">Duration:</span>
+          <span id="headerSessionDuration" class="pill-val">00:00</span>
+        </div>
+        <div class="telemetry-pill">
+          <span class="pill-label">Status:</span>
+          <span id="headerMonitoringStatus" class="badge badge-neutral">Not Started</span>
+        </div>
+        <div class="telemetry-pill" title="Free Gmail SMTP Escalation Service">
+          <span class="pill-label">Email:</span>
+          <span id="headerEmailStatus" class="badge badge-neutral">Checking</span>
+        </div>
+        <div class="privacy-badge" title="All computer vision processing executes client-side. Zero camera data is uploaded.">
+          🔒 Local Edge AI
+        </div>
+      </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="app-main">
+      <!-- VIEW 1: LIVE MONITORING DASHBOARD -->
+      <section id="view-dashboard" class="view-section">
+        <!-- Active Alerts Banner Display -->
+        <div id="alertContainer" class="alert-container hidden"></div>
+
+        <div class="dashboard-grid">
+          <!-- Left Column: Video Feed & Controls -->
+          <div class="camera-column">
+            <div class="panel camera-panel">
+              <div class="panel-header">
+                <h2 class="panel-title">Driver Camera Feed</h2>
+                <div class="hud-status-group">
+                  <span id="faceTrackingBadge" class="badge badge-neutral">Camera Off</span>
+                  <span id="fpsCounter" class="hud-pill">0 FPS</span>
+                </div>
+              </div>
+
+              <div class="video-container">
+                <video id="webcamView" autoplay playsinline muted></video>
+                <canvas id="overlayCanvas"></canvas>
+                <div id="videoErrorMessage" class="video-error hidden"></div>
+              </div>
+
+              <!-- Hidden Processing Canvas for motion analysis -->
+              <canvas id="processingCanvas" style="display: none;"></canvas>
+
+              <div class="camera-controls-bar">
+                <button id="btnStart" class="btn btn-primary">Start Monitoring</button>
+                <button id="btnStop" class="btn btn-danger" disabled>Stop Monitoring</button>
+                <button id="btnReset" class="btn btn-secondary">Reset</button>
+                <button id="btnMuteToggle" class="btn btn-secondary">Mute Audio</button>
+                <button id="btnToggleOverlay" class="btn btn-secondary">Toggle Overlay</button>
+              </div>
+            </div>
+
+            <!-- Session Incident Counters -->
+            <div class="panel session-summary-panel">
+              <h3 class="panel-subtitle">Session Incident Log Counters</h3>
+              <div class="summary-counters-grid">
+                <div class="summary-counter-card">
+                  <span class="counter-label">Sustained Closures</span>
+                  <span id="statSustainedClosures" class="counter-val text-danger">0</span>
+                </div>
+                <div class="summary-counter-card">
+                  <span class="counter-label">Long Blinks</span>
+                  <span id="statLongBlinks" class="counter-val text-warning">0</span>
+                </div>
+                <div class="summary-counter-card">
+                  <span class="counter-label">Head Nods</span>
+                  <span id="statHeadNods" class="counter-val text-orange">0</span>
+                </div>
+                <div class="summary-counter-card">
+                  <span class="counter-label">Tracking Lost</span>
+                  <span id="statTrackingLoss" class="counter-val text-muted">0</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Right Column: Safety Telemetry & Risk Status -->
+          <div class="telemetry-column">
+            <!-- Overall Risk & Contributing Indicators Panel -->
+            <div class="panel status-panel">
+              <div class="panel-header">
+                <h2 class="panel-title">Driver Safety Assessment</h2>
+                <span id="statusOverall" class="badge badge-neutral">Not Started</span>
+              </div>
+
+              <div class="risk-overview-row">
+                <div class="risk-score-box">
+                  <span class="score-title">Fatigue Risk Index</span>
+                  <div id="riskScoreDisplay" class="risk-score-num">0%</div>
+                </div>
+                <div class="risk-factors-box">
+                  <span class="score-title">Contributing Indicators</span>
+                  <div id="contributingFactorsList" class="factors-list">
+                    <span class="text-muted">No warning indicators active</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Eye Closure Big Display -->
+              <div class="telemetry-subpanel timer-box">
+                <div class="timer-meta-header">
+                  <span class="subpanel-title">Continuous Eye Closure</span>
+                  <span id="statusDrowsiness" class="badge badge-neutral">Normal</span>
+                </div>
+                <div class="timer-display-wrap">
+                  <div class="timer-display">
+                    <span id="closureTimer">0.0</span><span class="timer-unit">s</span>
+                  </div>
+                  <div class="ear-readouts">
+                    <div class="ear-item">L-EAR: <strong id="earLeft">--</strong></div>
+                    <div class="ear-item">R-EAR: <strong id="earRight">--</strong></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Blink Dynamics & Head Pose Grid -->
+              <div class="telemetry-dual-grid">
+                <!-- Blink Telemetry -->
+                <div class="telemetry-subpanel">
+                  <span class="subpanel-title">Blink Dynamics</span>
+                  <div class="subpanel-metrics">
+                    <div class="metric-row">
+                      <span class="metric-name">Total Blinks:</span>
+                      <strong id="blinkCount" class="metric-val">0</strong>
+                    </div>
+                    <div class="metric-row">
+                      <span class="metric-name">Long Blinks:</span>
+                      <strong id="longBlinkCount" class="metric-val text-warning">0</strong>
+                    </div>
+                    <div class="metric-row">
+                      <span class="metric-name">Rolling Frequency:</span>
+                      <strong id="blinkRate" class="metric-val">--</strong>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Head Pose Telemetry -->
+                <div class="telemetry-subpanel">
+                  <span class="subpanel-title">Head Orientation</span>
+                  <div class="subpanel-metrics">
+                    <div class="metric-row">
+                      <span class="metric-name">Pose State:</span>
+                      <span id="headPoseStatus" class="badge badge-neutral">--</span>
+                    </div>
+                    <div class="metric-row">
+                      <span class="metric-name">Nod Events:</span>
+                      <strong id="nodEventsCount" class="metric-val text-orange">0</strong>
+                    </div>
+                    <div class="metric-row">
+                      <span class="metric-name">Angles:</span>
+                      <span id="poseAngles" class="metric-val-sm">P: 0° | Y: 0° | R: 0°</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Camera Stability & Motion Analysis -->
+              <div class="telemetry-subpanel motion-box">
+                <div class="timer-meta-header">
+                  <span class="subpanel-title">Camera Motion Estimation (OpenCV.js)</span>
+                  <span id="statusShaking" class="badge badge-neutral">Normal Stability</span>
+                </div>
+                <div class="motion-readout-row">
+                  <div class="progress-bar">
+                    <div id="motionProgressBar" class="progress-fill" style="width: 0%;"></div>
+                  </div>
+                  <span id="motionIntensity" class="motion-intensity-val">0.0 px</span>
+                </div>
+                <span class="motion-disclaimer">Estimates camera displacement via optical flow. Does not measure physical vehicle chassis acceleration.</span>
+              </div>
+            </div>
+
+            <!-- Live Event Timeline Panel -->
+            <div class="panel timeline-panel">
+              <div class="panel-header">
+                <h3 class="panel-title">Live Safety Event Timeline</h3>
+                <div class="timeline-filters">
+                  <select id="filterCategory" class="form-select-sm">
+                    <option value="all">All Categories</option>
+                    <option value="drowsiness">Eye Closure</option>
+                    <option value="blink">Blink Dynamics</option>
+                    <option value="head_pose">Head Nodding</option>
+                    <option value="motion">Camera Motion</option>
+                    <option value="tracking">Face Tracking</option>
+                  </select>
+                  <select id="filterSeverity" class="form-select-sm">
+                    <option value="all">All Severities</option>
+                    <option value="caution">Caution</option>
+                    <option value="high">High Concern</option>
+                    <option value="persistent">Persistent</option>
+                  </select>
+                </div>
+              </div>
+              <ul id="eventTimelineList" class="timeline-list">
+                <li class="timeline-empty">No events recorded in this session.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- VIEW 2: SESSION HISTORY -->
+      <section id="view-history" class="view-section hidden"></section>
+
+      <!-- VIEW 3: SAFETY ANALYTICS -->
+      <section id="view-analytics" class="view-section hidden"></section>
+
+      <!-- VIEW 4: SETTINGS & CALIBRATION -->
+      <section id="view-settings" class="view-section hidden"></section>
+
+      <!-- VIEW 5: ABOUT & DOCUMENTATION -->
+      <section id="view-about" class="view-section hidden"></section>
+    </main>
+
+    <!-- Footer Disclaimer -->
+    <footer class="app-footer">
+      <p>
+        <strong>Academic Evaluation Prototype:</strong> Edge-computed driver safety assistance system using MediaPipe FaceLandmarker and OpenCV.js optical flow. Does not replace certified automotive safety hardware.
+      </p>
+    </footer>
+  </div>
+
+  <!-- App Entry Point -->
+  <script type="module" src="./src/js/main.js"></script>
+</body>
+</html>
